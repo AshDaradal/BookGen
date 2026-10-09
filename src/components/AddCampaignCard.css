@@ -1,0 +1,24 @@
+/* Add-campaign box: #F9F0E0 fill, outlined, centered plus sign */
+.add-campaign {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--add-fill);
+  border: 2px solid var(--outline);
+  border-radius: var(--radius);
+  transition: transform 0.15s, background 0.2s;
+}
+
+.add-campaign:hover {
+  transform: translateY(-2px);
+  background: #f3e7d2;
+}
+
+.add-campaign__plus {
+  font-size: 64px;
+  font-weight: 300;
+  line-height: 1;
+  color: var(--text);
+}

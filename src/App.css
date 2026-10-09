@@ -1,0 +1,43 @@
+/* Homepage layout: page wrapper + campaign grid */
+.page {
+  max-width: 1126px;
+  margin: 0 auto;
+  padding: 40px 32px;
+}
+
+.page__title {
+  font-size: 40px;
+  margin-bottom: 28px;
+}
+
+/* Fixed-size shapes arranged in a responsive grid.
+   Add-card and campaign cards share the same square footprint. */
+.campaign-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(0, 200px));
+  gap: 24px;
+}
+
+/* Tablet */
+@media (max-width: 768px) {
+  .page {
+    padding: 32px 20px;
+  }
+
+  .page__title {
+    font-size: 32px;
+  }
+
+  .campaign-grid {
+    grid-template-columns: repeat(auto-fill, minmax(0, 160px));
+    gap: 18px;
+  }
+}
+
+/* Mobile: two columns that fill the available width */
+@media (max-width: 480px) {
+  .campaign-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+}

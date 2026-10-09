@@ -1,0 +1,47 @@
+/* ============================================================
+   Global design tokens & base styles
+   Color palette (per project spec):
+   - text / outline : #2E2910
+   - background     : #FFF7EB
+   - green accent   : #A2AB73
+   - add-card fill  : #F9F0E0
+   ============================================================ */
+:root {
+  --text: #2e2910;
+  --outline: #2e2910;
+  --bg: #fff7eb;
+  --green: #a2ab73;
+  --add-fill: #f9f0e0;
+
+  --radius: 14px;
+  --sans: 'Segoe UI', system-ui, Roboto, sans-serif;
+
+  font: 16px/1.5 var(--sans);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+h1,
+h2,
+h3 {
+  color: var(--text);
+  font-weight: 600;
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+}

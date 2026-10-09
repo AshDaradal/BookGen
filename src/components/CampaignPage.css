@@ -1,0 +1,377 @@
+/* ============================================================
+   CampaignPage: three-column workspace
+   left (controls) | middle (preview) | right (book list)
+   ============================================================ */
+.campaign-page {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+.campaign-page__head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.campaign-page__back {
+  background: transparent;
+  border: 2px solid var(--outline);
+  color: var(--text);
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.campaign-page__back:hover {
+  background: var(--add-fill);
+}
+
+.campaign-page__heading {
+  display: flex;
+  flex-direction: column;
+}
+
+.campaign-page__title {
+  font-size: 32px;
+}
+
+/* Name of the campaign this page belongs to */
+.campaign-page__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--green);
+}
+
+/* Single borderless workspace holding all three columns */
+.campaign-page__workspace {
+  background: var(--bg);
+  border: none;
+}
+
+/* Three columns: left and right fixed-ish, middle flexible */
+.campaign-page__grid {
+  display: grid;
+  grid-template-columns: 320px 1fr 300px;
+  gap: 24px;
+  align-items: start;
+}
+
+/* ---------- Shared box / control styles ----------
+   Each panel keeps its own outline. */
+.cp-box,
+.cp-middle,
+.cp-right {
+  border: 2px solid var(--outline);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.cp-input {
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--text);
+  background: var(--bg);
+  border: 2px solid var(--outline);
+  border-radius: 8px;
+  padding: 10px 12px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cp-input:focus {
+  outline: 2px solid var(--green);
+  outline-offset: 1px;
+}
+
+/* ---------- LEFT COLUMN ---------- */
+.cp-left {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.cp-box {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Header row: title on the left, Page/Book switch on the right */
+.cp-box__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cp-box__title {
+  font-size: 18px;
+}
+
+/* Switch button toggles the editor between Page and Book */
+.cp-switch {
+  background: var(--add-fill);
+  border: 2px solid var(--outline);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 999px;
+  transition: background 0.2s;
+}
+
+.cp-switch:hover {
+  background: var(--green);
+}
+
+/* Page description ~3x the height of a single-line input */
+.cp-input--textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+/* 6-cell action grid (2 columns x 3 rows) */
+.cp-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.cp-btn {
+  background: var(--green);
+  border: 2px solid var(--outline);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 12px;
+  border-radius: 10px;
+  width: 100%;
+  transition: opacity 0.2s;
+}
+
+.cp-btn:hover {
+  opacity: 0.9;
+}
+
+/* Download cell: button above its scope dropdown */
+.cp-download {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Numeric up/down sits directly in a grid cell */
+.cp-add__num {
+  text-align: center;
+  align-self: start;
+}
+
+.cp-download__scope {
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
+/* ---------- MIDDLE COLUMN ---------- */
+.cp-middle {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Editable book title */
+.cp-book-title {
+  font-family: inherit;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid var(--outline);
+  padding: 8px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cp-book-title:focus {
+  outline: none;
+  border-bottom-color: var(--green);
+}
+
+/* Page preview with left/right arrows */
+.cp-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.cp-preview__arrow {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  font-size: 24px;
+  line-height: 1;
+  color: var(--text);
+  background: var(--add-fill);
+  border: 2px solid var(--outline);
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.cp-preview__arrow:hover {
+  background: var(--green);
+}
+
+/* Page canvas: book-page aspect ratio */
+.cp-preview__page {
+  flex: 1;
+  aspect-ratio: 3 / 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: var(--add-fill);
+  border: 2px solid var(--outline);
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.cp-preview__label {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ---------- RIGHT COLUMN ---------- */
+.cp-right {
+  padding: 14px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.cp-books {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Each book is a selectable button */
+.cp-book {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 2px solid var(--outline);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--add-fill);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.cp-book:hover {
+  background: #f3e7d2;
+}
+
+/* Selected book is highlighted green */
+.cp-book--active {
+  background: var(--green);
+}
+
+.cp-book__title {
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.cp-book__desc {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.cp-book__status {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--green);
+  border: 2px solid var(--outline);
+}
+
+/* On an active (green) card, flip the badge fill for contrast */
+.cp-book--active .cp-book__status {
+  background: var(--add-fill);
+}
+
+/* ---------- PAGE GALLERY (below the three columns) ---------- */
+.cp-gallery {
+  margin-top: 28px;
+  border: 2px solid var(--outline);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+
+.cp-gallery__title {
+  font-size: 18px;
+  margin-bottom: 14px;
+}
+
+/* Responsive thumbnail grid */
+.cp-gallery__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 12px;
+}
+
+/* Each thumbnail is a page-shaped button */
+.cp-gallery__item {
+  aspect-ratio: 3 / 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--add-fill);
+  border: 2px solid var(--outline);
+  border-radius: 8px;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.cp-gallery__item:hover {
+  transform: translateY(-2px);
+}
+
+/* Active page matches the preview selection */
+.cp-gallery__item--active {
+  background: var(--green);
+}
+
+/* ============================================================
+   Responsive: collapse to a single column on narrow screens
+   ============================================================ */
+@media (max-width: 1024px) {
+  .campaign-page__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cp-right {
+    max-height: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .campaign-page {
+    padding: 20px;
+  }
+
+  .cp-actions {
+    grid-template-columns: 1fr;
+  }
+}

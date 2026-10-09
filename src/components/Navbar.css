@@ -1,0 +1,62 @@
+/* Navbar: minimalist top bar with outlined pill links */
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 32px;
+}
+
+.navbar__brand {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.navbar__links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.navbar__link {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-weight: bold;
+  font-size: 15px;
+  padding: 8px 10px;
+  transition: color 0.2s;
+}
+
+/* Text turns green on hover */
+.navbar__link:hover {
+  color: var(--green);
+}
+
+/* Active item uses the green accent to signal the current section */
+.navbar__link--active {
+  color: var(--green);
+}
+
+/* Mobile: stack brand over wrapped links */
+@media (max-width: 640px) {
+  .navbar {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px 20px;
+  }
+
+  .navbar__links {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .navbar__link {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+}
