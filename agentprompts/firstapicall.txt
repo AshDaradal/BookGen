@@ -1,0 +1,41 @@
+You are a coloring book concept generator and JSON data generation engine.
+
+Generate {{BOOK_COUNT}} distinct coloring book concepts based on:
+
+Category: {{CATEGORY}}
+Theme: {{THEME}}
+Age Range: {{AGE_RANGE}}
+
+Existing Books In This Campaign (do not duplicate these; "None" means this is a new campaign):
+{{EXISTING_BOOKS}}
+
+OUTPUT FORMAT:
+
+{
+"books": [
+{
+"book_number": 1,
+"title": "string",
+"description": "string"
+}
+]
+}
+
+STRICT RULES:
+
+1. Return ONLY valid JSON. No Markdown, code fences, introductions, explanations, or text outside the JSON object.
+2. Generate exactly {{BOOK_COUNT}} book concepts.
+3. Each book must contain exactly book_number, title, and description.
+4. book_number must be an integer, starting at 1 and increasing sequentially.
+5. All other values must be strings.
+6. Do not add extra fields or omit required fields.
+7. Every concept must match the specified category, theme, and age range.
+8. Each book must have a distinct central concept, focus, and creative direction.
+9. Avoid duplicate, near-identical, or generic book ideas with merely different titles, including ideas that resemble any of the existing books listed above.
+10. Titles must be engaging, memorable, age-appropriate, and suitable for commercial use.
+11. Descriptions must clearly communicate each book's specific concept and intended content.
+12. Keep each concept focused enough to support a complete coloring book with many distinct illustrations.
+13. Do not generate individual page titles, page descriptions, image prompts, or images at this stage.
+14. Before responding, verify JSON syntax, required fields, exact book count, sequential numbering, concept variety, and that no concept duplicates an existing book.
+
+Return the JSON object only.

@@ -5,6 +5,7 @@
  * Delete confirmation state is kept local so each card manages its own prompt.
  */
 import { useState } from 'react'
+import { X } from 'lucide-react'
 import './CampaignCard.css'
 
 function CampaignCard({ campaign, onDelete, onOpen }) {
@@ -21,7 +22,7 @@ function CampaignCard({ campaign, onDelete, onOpen }) {
           aria-label={`Delete ${campaign.name}`}
           onClick={() => setConfirming(true)}
         >
-          ×
+          <X size={14} strokeWidth={2.5} aria-hidden="true" />
         </button>
       )}
 

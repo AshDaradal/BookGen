@@ -5,6 +5,7 @@
  * Form state is kept local; the parent only receives the final payload.
  */
 import { useState } from 'react'
+import { X } from 'lucide-react'
 import './CampaignModal.css'
 
 // Category options for the category dropdown.
@@ -59,7 +60,7 @@ function CampaignModal({ onCreate, onClose }) {
           aria-label="Close"
           onClick={onClose}
         >
-          ×
+          <X size={16} strokeWidth={2.5} aria-hidden="true" />
         </button>
 
         <form className="modal__form" onSubmit={handleSubmit}>

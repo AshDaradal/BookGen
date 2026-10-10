@@ -17,6 +17,9 @@
 }
 
 .campaign-page__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: transparent;
   border: 2px solid var(--outline);
   color: var(--text);
@@ -158,6 +161,11 @@
   opacity: 0.9;
 }
 
+.cp-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* Download cell: button above its scope dropdown */
 .cp-download {
   display: flex;
@@ -215,8 +223,10 @@
   flex-shrink: 0;
   width: 40px;
   height: 40px;
-  font-size: 24px;
-  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   color: var(--text);
   background: var(--add-fill);
   border: 2px solid var(--outline);
@@ -230,8 +240,11 @@
 
 /* Page canvas: book-page aspect ratio */
 .cp-preview__page {
+  position: relative;
+  overflow: hidden;
   flex: 1;
-  aspect-ratio: 3 / 4;
+  min-width: 0;
+  aspect-ratio: 1536 / 2172; /* A4, same as the generated images */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -242,9 +255,77 @@
   box-sizing: border-box;
 }
 
+/* Label pill pinned to the bottom of the preview */
 .cp-preview__label {
-  font-size: 16px;
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  font-size: 14px;
   font-weight: 600;
+  padding: 3px 12px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 2px solid var(--outline);
+  white-space: nowrap;
+}
+
+/* Generated illustration filling a preview or thumbnail */
+.cp-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Spinner / fallback text inside a preview or thumbnail */
+.cp-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Inline loading / info message */
+.cp-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Rotating ring shown while something is generating */
+.cp-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--outline);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: cp-spin 0.8s linear infinite;
+}
+
+.cp-state .cp-spinner {
+  width: 22px;
+  height: 22px;
+}
+
+@keyframes cp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.cp-input:disabled,
+.cp-book-title:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* ---------- RIGHT COLUMN ---------- */
@@ -295,7 +376,9 @@
 }
 
 .cp-book__status {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   font-weight: 600;
   padding: 2px 10px;
@@ -315,23 +398,43 @@
   border: 2px solid var(--outline);
   border-radius: var(--radius);
   padding: 18px;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.cp-gallery__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 14px;
 }
 
 .cp-gallery__title {
   font-size: 18px;
-  margin-bottom: 14px;
 }
 
-/* Responsive thumbnail grid */
+/* Single-row carousel that slides horizontally inside the screen width.
+   Padding keeps the active outline and hover lift from being clipped. */
 .cp-gallery__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  display: flex;
   gap: 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  padding: 6px 6px 10px;
+  margin: -6px -6px 0;
 }
 
 /* Each thumbnail is a page-shaped button */
 .cp-gallery__item {
-  aspect-ratio: 3 / 4;
+  position: relative;
+  overflow: hidden;
+  flex: 0 0 120px;
+  scroll-snap-align: start;
+  padding: 0;
+  aspect-ratio: 1536 / 2172;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -351,6 +454,29 @@
 /* Active page matches the preview selection */
 .cp-gallery__item--active {
   background: var(--green);
+  outline: 3px solid var(--green);
+  outline-offset: 2px;
+}
+
+/* Thumbnail label pinned to the bottom edge */
+.cp-gallery__label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 4px 6px;
+  font-size: 12px;
+  background: var(--bg);
+  border-top: 2px solid var(--outline);
+}
+
+.cp-gallery__item--active .cp-gallery__label {
+  background: var(--green);
+}
+
+/* Spinner sits above the bottom label inside a thumbnail */
+.cp-gallery__item .cp-state {
+  margin-bottom: 24px;
 }
 
 /* ============================================================

@@ -1,0 +1,92 @@
+Campaign Parameters
+Category · Theme · Age Range · Number of Books
+||
+Text AI — Call 1
+Generate multiple distinct book concepts, each with a title and description.
+||
+Text AI — Call 2 per book
+Generate each book's cover prompt and 30 page specifications using that book's title and description, plus the original campaign parameters.
+||
+Image AI
+Generate one full-color cover and 30 black-and-white illustrations for each book.
+
+This is an important note: The system will expect a JSON format for each api call that expects a text, first and second api call will expect a text (as do revisebookcall and revisepagecall). So everytime the response is given back the system should validate if the response is indeed in a JSON structure, if not then retry 3 times before failing.
+The system uses 5 prompt files:
+- firstapicall.txt (text): generate book concepts
+- secondapicall.txt (text): generate a book's cover prompt and pages
+- thirdapicall.txt (image): generate the cover and page illustrations
+- revisebookcall.txt (text): replace one book concept (used by "Revise whole book")
+- revisepagecall.txt (text): replace one page (used by "Revise Page only")
+The first call generates book concepts, if user inputs many books then many concepts, its dynamic so whether its only one there wont be a problem
+The system will use firstapicall.txt to generate the book concepts. For a new campaign {{EXISTING_BOOKS}} is filled with "None"
+
+After generating book concepts, for each book concept each will have their own sets of pages, each set of pages will have a cover page aswell.
+the system will use secondapicall.txt for it and we will expect the api to return a JSON containing that specific book and it's pages along with it's cover photo prompt
+Now, this loops for every book the user has prompted, so if the user prompted to have 3 books then do 3 api calls. 
+And the system should easily structure that into one json so everything's in one structure.
+
+Its important to validate if each response is in the correct json in order to avoid future silent errors
+Another important side note: I want you to remove every "'" aka apostrophes aka single quotes from each response, the operation must be done after parsing the JSON, this will be the final check before the system decides it is good to go.
+
+Once the whole JSON is prepared and ready, we will now go into deeper looping, this time for each page, we will begin with the cover
+both cover and image prompts are specified in thirdapicall.txt
+
+One thing to note before I continue, I'll talk about the ui first. 
+on the right sidebar will be the list of books that was generated, clicking it will generate the pages associated with that book, each page will be listed on the bottom carousel
+Click on an image in the carousel will focus on it and appear on the previewer, by default the first book will be highlighted and the first page will be highlighted, this will be a rule whenever the page loads or a user clicks on a book.
+
+"Revise whole book" button will revise the whole book, from it's title, description cover photo, to each of it's pages and their associated title and descriptions
+  Flow: revisebookcall.txt (new title + description, with {{OTHER_BOOKS}} filled with the other books in the campaign) -> secondapicall.txt (new cover prompt + pages) -> thirdapicall.txt (new cover + page images)
+"Revise Page only" button will only revise that page's data, so the page's illustration, title, description will change. this means making api calls.
+  Flow: revisepagecall.txt (new page title, description, image prompt, under the book's parameters, with {{OTHER_PAGES}} filled with the other pages of the book) -> thirdapicall.txt (new page image)
+"Add more books" and it's text field will add more books, this means starting from the first api call and just adding that to the campaign data.
+  Flow: firstapicall.txt with {{EXISTING_BOOKS}} filled with the titles and descriptions already in the campaign -> secondapicall.txt -> thirdapicall.txt
+  New book numbers continue after the last existing book
+"Download Book" will convert every page into an A4 pdf, zip it, and download it for the user to see.
+"Download kindle" is still a work in progress regarding the pipeline so this is for future use.
+
+Continuing... I want the database to support every change about this. I dont know if asynch is supported in edge functions. But we can make use of cron and queue jobs so that everything is clean and no errors and bottlenecks appear.
+Also include loading spinners that shows the user if a page is being worked on, for text api calls we can just wait for it's response with 120s timeout time, except Call 2 (secondapicall.txt) which uses a 300s timeout because 30 pages of JSON takes longer to generate. Measure actual Call 2 duration in Phase 2 and adjust. A timeout counts as one of the 3 retries.
+
+Image results must be downloaded to supabase's bucket
+We will create a variable in edge functions for BGAPI
+
+Here are api calls examples:
+curl -s "https://apimaster.ai/v1/messages" \
+  -H "x-api-key: {BGAPI}" \
+  -H "anthropic-version: 2023-06-01" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "claude-fable-5-1",
+    "max_tokens": (adjust as stated in this docu),
+    "messages": [{"role": "user", "content": "here goes the first or second api prompt"}]
+  }'
+
+Use about 16000 max tokens for Call 2 and about 2000 max tokens for the other calls
+
+BGAPI is an environment variable that I've set
+The ai we will be prompting is claude-fable-5-1
+
+The image ai we will be prompting is gpt-image-2.5-sunburst and here is the sample api call:
+curl --fail-with-body --max-time 600 "https://apimaster.ai/v1/images/generations/async" \
+  -H "Authorization: Bearer {BGAPI}" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-image-2.5-sunburst","prompt":"A watercolor cat on the moon","n":1,"size": "1536x2048"}'
+
+when sent a request it responds with a response that contains a task id,
+we will use this to poll for it's completion once then after every 3 seconds:
+curl --fail-with-body "https://apimaster.ai/v1/tasks/TASK_ID?model=gpt-image-2.5-sunburst" \
+  -H "Authorization: Bearer {BGAPI}"
+
+The complete documentation is here:
+https://apimaster.ai/docs/en/api/images/gpt-image-2
+
+
+important notes:
+delete the old image file whenever a page or book is revised
+Store the full resolution of images in the bucket, but compress it when downloading for ui show
+Cron runs must not overlap:
+- pg_cron runs the worker once every 1 minute
+- each run polls image tasks every 3 seconds and stops after about 50 seconds, so it finishes before the next run starts
+- jobs are claimed with SELECT ... FOR UPDATE SKIP LOCKED so two runs never process the same job
+- the cron run only invokes the worker when there are queued or pending jobs

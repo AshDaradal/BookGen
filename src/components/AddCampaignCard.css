@@ -17,8 +17,5 @@
 }
 
 .add-campaign__plus {
-  font-size: 64px;
-  font-weight: 300;
-  line-height: 1;
   color: var(--text);
 }

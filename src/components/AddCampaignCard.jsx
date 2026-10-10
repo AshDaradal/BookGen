@@ -2,8 +2,9 @@
  * AddCampaignCard
  * The left-most card in the campaigns grid.
  * Single responsibility: trigger creation of a new campaign.
- * Styled as a #F9F0E0 box with a centered "+" sign.
+ * Styled as a #F9F0E0 box with a centered plus icon.
  */
+import { Plus } from 'lucide-react'
 import './AddCampaignCard.css'
 
 function AddCampaignCard({ onAdd }) {
@@ -14,9 +15,12 @@ function AddCampaignCard({ onAdd }) {
       onClick={onAdd}
       aria-label="Add campaign"
     >
-      <span className="add-campaign__plus" aria-hidden="true">
-        +
-      </span>
+      <Plus
+        className="add-campaign__plus"
+        size={56}
+        strokeWidth={1.5}
+        aria-hidden="true"
+      />
     </button>
   )
 }

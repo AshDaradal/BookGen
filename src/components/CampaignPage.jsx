@@ -2,43 +2,72 @@
  * CampaignPage
  * Full editing view for a single campaign, shown after creation.
  * Single responsibility: lay out the campaign workspace (left controls,
- * middle book preview, right book list) and manage local editing state.
+ * middle book preview, right book list) backed by the database.
  *
- * Data model:
- *   book  = { id, title, description, status, pages: [page] }
- *   page  = { id, title, description }
- * The selected book + selected page drive both the preview and the editors.
+ * Data:
+ *   books = rows of `books` for this campaign (Realtime-synced)
+ *   pages = rows of `pages` for the selected book (Realtime-synced)
+ * The carousel shows the cover first, then the pages. The selected book +
+ * selected item drive both the preview and the editors.
  */
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
+import { supabase, imageUrl, upsertRow } from '../lib/supabase'
 import './CampaignPage.css'
 
 // Download scope options shared by the download controls.
 const DOWNLOAD_SCOPES = ['Current Book', 'All Books']
 
-// Build an empty set of pages for a new book.
-const buildPages = () =>
-  Array.from({ length: 6 }, (_, i) => ({
-    id: i + 1,
-    title: '',
-    description: '',
-  }))
+// Row status -> label shown in the UI.
+const STATUS_LABELS = {
+  queued: 'Queued',
+  processing: 'Generating',
+  succeeded: 'Ready',
+  failed: 'Failed',
+}
 
-// Build the initial book list from the campaign's requested book amount.
-const buildBooks = (amount) =>
-  Array.from({ length: Math.max(1, Number(amount) || 1) }, (_, i) => ({
-    id: i + 1,
-    title: `Book ${i + 1}`,
-    description: '',
-    status: 'Draft',
-    pages: buildPages(),
-  }))
+// Compressed width for gallery thumbnails (the preview uses the original).
+const THUMB_WIDTH = 300
+
+const isPending = (status) => status === 'queued' || status === 'processing'
+
+function Spinner() {
+  return <span className="cp-spinner" aria-hidden="true" />
+}
+
+// Image, spinner, or fallback text for one carousel item.
+function Illustration({ item, width, pendingText, emptyText }) {
+  if (item.path) {
+    return (
+      <img
+        className="cp-img"
+        src={imageUrl(item.path, width)}
+        alt={item.label}
+        loading="lazy"
+      />
+    )
+  }
+  if (item.pending) {
+    return (
+      <span className="cp-state">
+        <Spinner />
+        {pendingText}
+      </span>
+    )
+  }
+  return (
+    <span className="cp-state">{item.failed ? 'Failed' : emptyText}</span>
+  )
+}
 
 function CampaignPage({ campaign, onBack }) {
-  // Books are the single source of truth; each carries its own pages.
-  const [books, setBooks] = useState(() => buildBooks(campaign.bookAmount))
-  // Which book is currently selected (right column + middle preview).
-  const [selectedBookId, setSelectedBookId] = useState(1)
-  // Which page of the selected book is active.
+  const [campaignStatus, setCampaignStatus] = useState(campaign.status)
+  const [books, setBooks] = useState([])
+  const [booksLoaded, setBooksLoaded] = useState(false)
+  const [pages, setPages] = useState([])
+  // Which book is selected (null = first book).
+  const [selectedBookId, setSelectedBookId] = useState(null)
+  // Which carousel item is active (0 = cover).
   const [pageIndex, setPageIndex] = useState(0)
   // Left panel edits either the current "Page" or the current "Book".
   const [panelMode, setPanelMode] = useState('page')
@@ -47,75 +76,248 @@ function CampaignPage({ campaign, onBack }) {
   // Selected scope for each download control.
   const [bookScope, setBookScope] = useState(DOWNLOAD_SCOPES[0])
   const [kindleScope, setKindleScope] = useState(DOWNLOAD_SCOPES[0])
+  // Row being edited: { table, id, title, description } snapshot from focus.
+  const editingRef = useRef(null)
+  const requestRef = useRef(false)
+  const [submitting, setSubmitting] = useState(null)
 
-  // Derived selections used throughout the view.
-  const selectedBook = books.find((b) => b.id === selectedBookId) || books[0]
-  const pages = selectedBook.pages
-  const totalPages = pages.length
-  const currentPage = pages[pageIndex] || pages[0]
+  const requestGeneration = async (action, args, targetId) => {
+    if (requestRef.current) return
+    requestRef.current = true
+    setSubmitting(action)
+    try {
+      const { error } = await supabase.rpc(action, args)
+      if (error) throw error
+      setCampaignStatus('queued')
+      if (action === 'request_revise_book') {
+        setBooks((prev) => prev.map((b) => b.id === targetId ? { ...b, status: 'queued' } : b))
+      } else if (action === 'request_revise_page') {
+        setPages((prev) => prev.map((p) => p.id === targetId ? { ...p, status: 'queued' } : p))
+        setBooks((prev) => prev.map((b) => b.id === bookId ? { ...b, status: 'queued' } : b))
+      }
+    } catch (error) {
+      alert(`Could not request generation: ${error.message}`)
+    } finally {
+      requestRef.current = false
+      setSubmitting(null)
+    }
+  }
+
+  const selectedBook =
+    books.find((b) => b.id === selectedBookId) || books[0] || null
+  const bookId = selectedBook?.id
+
+  // Keep local text for the row being edited when a Realtime update arrives.
+  const keepEdits = (table, rows, row) => {
+    const ed = editingRef.current
+    const local = rows.find((r) => r.id === row.id)
+    if (!ed || ed.table !== table || ed.id !== row.id || !local) return row
+    return { ...row, title: local.title, description: local.description }
+  }
+
+  // Campaign status + books, kept live through Realtime.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`campaign-${campaign.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'campaigns', filter: `id=eq.${campaign.id}` },
+        ({ new: row }) => setCampaignStatus(row.status),
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'books', filter: `campaign_id=eq.${campaign.id}` },
+        ({ eventType, new: row, old }) =>
+          setBooks((prev) =>
+            eventType === 'DELETE'
+              ? prev.filter((b) => b.id !== old.id)
+              : upsertRow(prev, keepEdits('books', prev, row), 'book_number'),
+          ),
+      )
+      .subscribe()
+
+    supabase
+      .from('campaigns')
+      .select('status')
+      .eq('id', campaign.id)
+      .single()
+      .then(({ data }) => data && setCampaignStatus(data.status))
+
+    supabase
+      .from('books')
+      .select('*')
+      .eq('campaign_id', campaign.id)
+      .order('book_number')
+      .then(({ data, error }) => {
+        if (error) alert(`Could not load books: ${error.message}`)
+        else setBooks(data)
+        setBooksLoaded(true)
+      })
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [campaign.id])
+
+  // Pages of the selected book, kept live through Realtime.
+  useEffect(() => {
+    setPages([])
+    if (!bookId) return
+
+    const channel = supabase
+      .channel(`pages-${bookId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'pages', filter: `book_id=eq.${bookId}` },
+        ({ eventType, new: row, old }) =>
+          setPages((prev) =>
+            eventType === 'DELETE'
+              ? prev.filter((p) => p.id !== old.id)
+              : upsertRow(prev, keepEdits('pages', prev, row), 'page_number'),
+          ),
+      )
+      .subscribe()
+
+    supabase
+      .from('pages')
+      .select('*')
+      .eq('book_id', bookId)
+      .order('page_number')
+      .then(({ data, error }) => {
+        if (error) alert(`Could not load pages: ${error.message}`)
+        else setPages(data)
+      })
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [bookId])
+
+  // Carousel items: cover first, then the pages.
+  const items = selectedBook
+    ? [
+        {
+          key: 'cover',
+          label: 'Cover',
+          path: selectedBook.cover_image_path,
+          pending: isPending(selectedBook.status),
+          failed: false,
+        },
+        ...pages.map((p) => ({
+          key: p.id,
+          label: `Page ${p.page_number}`,
+          path: p.image_path,
+          pending: isPending(p.status),
+          failed: p.status === 'failed',
+          page: p,
+        })),
+      ]
+    : []
+  const currentItem = items[pageIndex] || items[0] || null
+  const currentPage = currentItem?.page || null
 
   // Clamp the numeric up/down control to a minimum of 1.
   const handleAddAmount = (value) => {
     const n = Number(value)
-    setAddAmount(Number.isNaN(n) || n < 1 ? 1 : n)
+    setAddAmount(Number.isFinite(n) ? Math.min(100, Math.max(1, Math.floor(n))) : 1)
   }
 
-  // Append the requested number of books to the right-hand list.
-  const handleAddBooks = () => {
-    setBooks((prev) => {
-      const start = prev.length
-      const extra = Array.from({ length: addAmount }, (_, i) => ({
-        id: start + i + 1,
-        title: `Book ${start + i + 1}`,
-        description: '',
-        status: 'Draft',
-        pages: buildPages(),
-      }))
-      return [...prev, ...extra]
-    })
-  }
-
-  // Update a field on the selected book (immutably).
-  const updateBook = (field, value) => {
+  // Local edit of the selected book / page (saved on blur).
+  const updateBook = (field, value) =>
     setBooks((prev) =>
-      prev.map((b) =>
-        b.id === selectedBookId ? { ...b, [field]: value } : b
-      )
+      prev.map((b) => (b.id === bookId ? { ...b, [field]: value } : b)),
     )
+  const updatePage = (field, value) =>
+    setPages((prev) =>
+      prev.map((p) => (p.id === currentPage.id ? { ...p, [field]: value } : p)),
+    )
+
+  // Snapshot the row on focus so blur only saves real changes.
+  const startEdit = (table, row) => {
+    editingRef.current = {
+      table,
+      id: row.id,
+      title: row.title,
+      description: row.description,
+    }
   }
 
-  // Update a field on the selected page of the selected book (immutably).
-  const updatePage = (field, value) => {
-    setBooks((prev) =>
-      prev.map((b) =>
-        b.id === selectedBookId
-          ? {
-              ...b,
-              pages: b.pages.map((p, i) =>
-                i === pageIndex ? { ...p, [field]: value } : p
-              ),
-            }
-          : b
-      )
-    )
+  const saveEdit = async (table, row) => {
+    const snap = editingRef.current
+    editingRef.current = null
+    if (!row || !snap || snap.table !== table || snap.id !== row.id) return
+    const changes = {}
+    for (const field of ['title', 'description']) {
+      if (row[field] !== snap[field]) changes[field] = row[field]
+    }
+    if (Object.keys(changes).length === 0) return
+    const { error } = await supabase.from(table).update(changes).eq('id', row.id)
+    if (error) alert(`Could not save: ${error.message}`)
   }
 
-  // Select a book from the list and reset to its first page.
+  // Props wiring an input to a book/page field with save-on-blur.
+  const bookField = (field) => ({
+    value: selectedBook?.[field] ?? '',
+    disabled: !selectedBook,
+    onChange: (e) => updateBook(field, e.target.value),
+    onFocus: () => startEdit('books', selectedBook),
+    onBlur: () => saveEdit('books', selectedBook),
+  })
+  const pageField = (field) =>
+    currentPage
+      ? {
+          value: currentPage[field] ?? '',
+          onChange: (e) => updatePage(field, e.target.value),
+          onFocus: () => startEdit('pages', currentPage),
+          onBlur: () => saveEdit('pages', currentPage),
+        }
+      : { value: '', disabled: true, readOnly: true }
+
+  // Select a book from the list and reset to its first item (the cover).
   const handleSelectBook = (id) => {
     setSelectedBookId(id)
     setPageIndex(0)
   }
 
-  // Preview navigation (wraps within the selected book's page range).
-  const goPrev = () => setPageIndex((i) => (i > 0 ? i - 1 : totalPages - 1))
-  const goNext = () => setPageIndex((i) => (i < totalPages - 1 ? i + 1 : 0))
+  // Preview navigation (wraps within the selected book's items).
+  const total = items.length
+  const goPrev = () => total && setPageIndex((i) => (i > 0 ? i - 1 : total - 1))
+  const goNext = () => total && setPageIndex((i) => (i < total - 1 ? i + 1 : 0))
+
+  // Right column message while there are no books yet.
+  const booksNote = !booksLoaded ? (
+    <p className="cp-note">
+      <Spinner /> Loading books...
+    </p>
+  ) : campaignStatus === 'failed' ? (
+    <p className="cp-note">Could not generate book concepts.</p>
+  ) : (
+    <p className="cp-note">
+      <Spinner /> Generating book concepts...
+    </p>
+  )
+
+  // Gallery message while the selected book has no pages yet.
+  const pagesNote =
+    selectedBook && pages.length === 0 ? (
+      isPending(selectedBook.status) ? (
+        <span className="cp-note">
+          <Spinner /> Writing pages...
+        </span>
+      ) : (
+        <span className="cp-note">
+          {selectedBook.status === 'failed' ? 'Page generation failed.' : 'No pages yet.'}
+        </span>
+      )
+    ) : null
 
   return (
     <main className="campaign-page">
       <div className="campaign-page__head">
         {/* Back button sits above the page title */}
         <button type="button" className="campaign-page__back" onClick={onBack}>
-          ← Back
+          <ArrowLeft size={16} strokeWidth={2.25} aria-hidden="true" />
+          Back
         </button>
         <div className="campaign-page__heading">
           <h1 className="campaign-page__title">Campaign Page</h1>
@@ -147,21 +349,23 @@ function CampaignPage({ campaign, onBack }) {
               </div>
 
               {panelMode === 'page' ? (
-                // Page editor: edits the selected page of the selected book
+                // Page editor: edits the selected page (the cover has no text)
                 <>
                   <input
                     type="text"
                     className="cp-input"
-                    placeholder="Page Title"
-                    value={currentPage.title}
-                    onChange={(e) => updatePage('title', e.target.value)}
+                    placeholder={currentItem?.key === 'cover' ? 'Cover' : 'Page Title'}
+                    {...pageField('title')}
                   />
                   {/* Description is ~3x the height of a standard input */}
                   <textarea
                     className="cp-input cp-input--textarea"
-                    placeholder="Page Description"
-                    value={currentPage.description}
-                    onChange={(e) => updatePage('description', e.target.value)}
+                    placeholder={
+                      currentItem?.key === 'cover'
+                        ? 'The cover uses the book title. Switch to Book to edit it.'
+                        : 'Page Description'
+                    }
+                    {...pageField('description')}
                   />
                 </>
               ) : (
@@ -171,14 +375,12 @@ function CampaignPage({ campaign, onBack }) {
                     type="text"
                     className="cp-input"
                     placeholder="Book Title"
-                    value={selectedBook.title}
-                    onChange={(e) => updateBook('title', e.target.value)}
+                    {...bookField('title')}
                   />
                   <textarea
                     className="cp-input cp-input--textarea"
                     placeholder="Book Description"
-                    value={selectedBook.description}
-                    onChange={(e) => updateBook('description', e.target.value)}
+                    {...bookField('description')}
                   />
                 </>
               )}
@@ -187,11 +389,23 @@ function CampaignPage({ campaign, onBack }) {
             {/* 6-cell action grid, in the required order */}
             <section className="cp-actions">
               {/* Row 1 */}
-              <button type="button" className="cp-btn">
-                Revise Whole Book
+              <button
+                type="button"
+                className="cp-btn"
+                disabled={!!submitting || !selectedBook || isPending(selectedBook.status)}
+                aria-busy={submitting === 'request_revise_book'}
+                onClick={() => requestGeneration('request_revise_book', { p_book_id: bookId }, bookId)}
+              >
+                {submitting === 'request_revise_book' ? 'Requesting revision...' : 'Revise Whole Book'}
               </button>
-              <button type="button" className="cp-btn">
-                Revise Page Only
+              <button
+                type="button"
+                className="cp-btn"
+                disabled={!!submitting || !currentPage || isPending(currentPage.status) || isPending(selectedBook?.status)}
+                aria-busy={submitting === 'request_revise_page'}
+                onClick={() => requestGeneration('request_revise_page', { p_page_id: currentPage.id }, currentPage.id)}
+              >
+                {submitting === 'request_revise_page' ? 'Requesting revision...' : 'Revise Page Only'}
               </button>
 
               {/* Row 2 */}
@@ -199,13 +413,21 @@ function CampaignPage({ campaign, onBack }) {
                 type="number"
                 className="cp-input cp-add__num"
                 min="1"
+                max="100"
+                disabled={!!submitting || isPending(campaignStatus)}
                 step="1"
                 value={addAmount}
                 onChange={(e) => handleAddAmount(e.target.value)}
                 aria-label="Number of books to add"
               />
-              <button type="button" className="cp-btn" onClick={handleAddBooks}>
-                Add more Books
+              <button
+                type="button"
+                className="cp-btn"
+                disabled={!!submitting || isPending(campaignStatus)}
+                aria-busy={submitting === 'request_add_books'}
+                onClick={() => requestGeneration('request_add_books', { p_campaign_id: campaign.id, p_count: addAmount })}
+              >
+                {submitting === 'request_add_books' ? 'Requesting books...' : isPending(campaignStatus) && books.length > 0 ? 'Campaign busy...' : 'Add more Books'}
               </button>
 
               {/* Row 3: downloads, each with a scope dropdown */}
@@ -250,9 +472,9 @@ function CampaignPage({ campaign, onBack }) {
             <input
               type="text"
               className="cp-book-title"
-              value={selectedBook.title}
-              onChange={(e) => updateBook('title', e.target.value)}
+              placeholder="Book title"
               aria-label="Book title"
+              {...bookField('title')}
             />
 
             <div className="cp-preview">
@@ -262,11 +484,22 @@ function CampaignPage({ campaign, onBack }) {
                 onClick={goPrev}
                 aria-label="Previous page"
               >
-                ‹
+                <ChevronLeft size={22} strokeWidth={2.25} aria-hidden="true" />
               </button>
 
               <div className="cp-preview__page">
-                <span className="cp-preview__label">Page {pageIndex + 1}</span>
+                {currentItem ? (
+                  <>
+                    <Illustration
+                      item={currentItem}
+                      pendingText="Generating illustration..."
+                      emptyText="No illustration yet"
+                    />
+                    <span className="cp-preview__label">{currentItem.label}</span>
+                  </>
+                ) : (
+                  <span className="cp-state">No book selected</span>
+                )}
               </div>
 
               <button
@@ -275,7 +508,7 @@ function CampaignPage({ campaign, onBack }) {
                 onClick={goNext}
                 aria-label="Next page"
               >
-                ›
+                <ChevronRight size={22} strokeWidth={2.25} aria-hidden="true" />
               </button>
             </div>
           </section>
@@ -283,22 +516,25 @@ function CampaignPage({ campaign, onBack }) {
           {/* RIGHT COLUMN: scrollable, selectable list of books */}
           <aside className="cp-right">
             <div className="cp-books">
+              {books.length === 0 && booksNote}
               {books.map((book) => (
                 <button
                   type="button"
                   key={book.id}
                   className={
-                    'cp-book' +
-                    (book.id === selectedBookId ? ' cp-book--active' : '')
+                    'cp-book' + (book.id === bookId ? ' cp-book--active' : '')
                   }
                   onClick={() => handleSelectBook(book.id)}
-                  aria-current={book.id === selectedBookId ? 'true' : undefined}
+                  aria-current={book.id === bookId ? 'true' : undefined}
                 >
                   <h3 className="cp-book__title">{book.title}</h3>
                   <p className="cp-book__desc">
                     {book.description || 'No description yet.'}
                   </p>
-                  <span className="cp-book__status">Status: {book.status}</span>
+                  <span className="cp-book__status">
+                    {isPending(book.status) && <Spinner />}
+                    Status: {STATUS_LABELS[book.status] || book.status}
+                  </span>
                 </button>
               ))}
             </div>
@@ -308,21 +544,25 @@ function CampaignPage({ campaign, onBack }) {
 
       {/* PAGE GALLERY: selecting a thumbnail updates the middle preview */}
       <section className="cp-gallery">
-        <h2 className="cp-gallery__title">Pages</h2>
+        <div className="cp-gallery__head">
+          <h2 className="cp-gallery__title">Pages</h2>
+          {pagesNote}
+        </div>
         <div className="cp-gallery__grid">
-          {pages.map((page, index) => (
+          {items.map((item, index) => (
             <button
               type="button"
-              key={page.id}
+              key={item.key}
               className={
                 'cp-gallery__item' +
                 (index === pageIndex ? ' cp-gallery__item--active' : '')
               }
               onClick={() => setPageIndex(index)}
-              aria-label={`Go to page ${index + 1}`}
+              aria-label={`Go to ${item.label.toLowerCase()}`}
               aria-current={index === pageIndex ? 'true' : undefined}
             >
-              Page {index + 1}
+              <Illustration item={item} width={THUMB_WIDTH} emptyText="" />
+              <span className="cp-gallery__label">{item.label}</span>
             </button>
           ))}
         </div>
